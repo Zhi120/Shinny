@@ -1,0 +1,489 @@
+---
+title: "Shiny"
+output: html_document
+date: "2024-11-15"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+What is the difference between Hadley_1 and Hadley_2? Use the functions Katia showed last Wednesday to investigate the difference.
+
+
+```{r}
+library(shiny)
+ui <- fluidPage(
+  selectInput("dataset", label = "Dataset", choices = ls("package:datasets")),
+  verbatimTextOutput("summary"),
+  tableOutput("table")
+)
+```
+
+Hadley_1
+```{r}
+server <- function(input, output, session) {
+  output$summary <- renderPrint({
+    dataset <- get(input$dataset, "package:datasets")
+    summary(dataset)
+  })
+  
+  output$table <- renderTable({
+    dataset <- get(input$dataset, "package:datasets")
+    dataset
+  })
+}
+shinyApp(ui, server)
+```
+
+Hadley_2
+```{r}
+server <- function(input, output, session) {
+  # Create a reactive expression
+  dataset <- reactive({
+    get(input$dataset, "package:datasets")
+  })
+
+  output$summary <- renderPrint({
+    # Use a reactive expression by calling it like a function
+    summary(dataset())
+  })
+  
+  output$table <- renderTable({
+    dataset()
+  })
+}
+shinyApp(ui, server)
+```
+
+```{r}
+library(microbenchmark)
+
+input <- list(dataset = "mtcars")
+
+microbenchmark(
+  Hadley_1 = {
+    dataset1 <- get(input$dataset, "package:datasets")
+    summary(dataset1)
+    dataset1
+  },
+  Hadley_2 = {
+    dataset2 <- get(input$dataset, "package:datasets") # No need for reactive()
+    summary(dataset2)
+    dataset2
+  }
+)
+```
+
+Hadley_1 performs better in terms of raw speed due to the absence of the reactive overhead. However, this comes at the cost of code redundancy and maintainability.
+
+Hadley_2, while slightly slower, offers better scalability and efficiency for Shiny apps with shared or complex dependencies.
+
+
+
+Prepare Chapters 2-4 from Mastering Shiny. complete in submit the homework in sections 2.3.5, 3.3.6, and 4.8.
+
+2.3.5
+
+1.
+
+a verbatimTextOutput()
+
+b textOutput()
+
+c verbatimTextOutput()
+
+d textOutput()
+
+2.
+```{r}
+library(shiny)
+
+ui <- fluidPage(
+  # Hidden text description for screen readers
+  tags$div(id = "plotDescription", style = "position: absolute; left: -9999px;",
+           "Scatterplot of five random numbers from 1 to 5"),
+  
+  # Wrap plotOutput with a div that includes aria-describedby
+  tagList(
+    tags$div(
+      plotOutput("plot", width = "700px", height = "300px"),
+      `aria-describedby` = "plotDescription"
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    plot(1:5)
+  }, res = 96)
+}
+
+shinyApp(ui, server)
+```
+3.
+```{r}
+library(shiny)
+library(DT)
+
+ui <- fluidPage(
+  DTOutput("table")
+)
+
+server <- function(input, output, session) {
+  output$table <- renderDataTable({
+    datatable(mtcars, options = list(
+      pageLength = 5,      # Number of rows to display initially
+      searching = FALSE,   # Remove search box
+      ordering = FALSE,    # Disable column sorting
+      paging = FALSE,      # Remove pagination controls
+      info = FALSE         # Remove table information
+    ))
+  })
+}
+
+shinyApp(ui, server)
+
+```
+
+4.
+```{r}
+library(shiny)
+library(reactable)
+
+ui <- fluidPage(
+  reactableOutput("table")
+)
+
+server <- function(input, output) {
+  output$table <- renderReactable({
+    reactable(mtcars)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+3.3.6
+
+1.
+```{r}
+#Fix code
+server1 <- function(input, output, server) {
+  output$greeting <- renderText(paste0("Hello ", input$name))
+}
+
+server2 <- function(input, output, server) {
+  greeting <- reactive(paste0("Hello ", input$name))
+  output$greeting <- renderText(greeting())
+}
+
+server3 <- function(input, output, server) {
+  output$greeting <- renderText(paste0("Hello ", input$name))
+}
+```
+
+2.
+```{r}
+library(DiagrammeR)
+
+grViz("
+digraph server1 {
+  graph [layout = dot]
+  
+  'input$a' -> 'c'
+  'input$b' -> 'c'
+  'c' -> 'e'
+  'input$d' -> 'e'
+  'e' -> 'output$f'
+}
+")
+
+grViz("
+digraph server2 {
+  graph [layout = dot]
+  
+  'input$x1' -> 'x'
+  'input$x2' -> 'x'
+  'input$x3' -> 'x'
+  'x' -> 'output$z'
+  'input$y1' -> 'y'
+  'input$y2' -> 'y'
+  'y' -> 'output$z'
+}
+")
+
+grViz("
+digraph server3 {
+  graph [layout = dot]
+  
+  'input$a' -> 'a'
+  'a' -> 'b'
+  'input$b' -> 'b'
+  'b' -> 'c'
+  'input$c' -> 'c'
+  'c' -> 'd'
+  'input$d' -> 'd'
+}
+")
+```
+3.
+This code doesn’t work because we called our reactive range, so when we call the range function we’re actually calling our new reactive. If we change the name of the reactive from range to col_range then the code will work.
+
+4.8
+
+1.
+```{r}
+library(DiagrammeR)
+grViz("
+  digraph Prototype {
+    'input$x' -> 'reactive_data';
+    'input$y' -> 'reactive_filter';
+    'reactive_filter' -> 'reactive_data';
+    'reactive_data' -> 'output$plot';
+  }
+")
+
+grViz("
+  digraph Rate_vs_Count {
+    'input$metric_choice' -> 'reactive_data';
+    'input$time_range' -> 'reactive_data';
+    'reactive_data' -> 'output$rate_plot';
+    'reactive_data' -> 'output$count_plot';
+  }
+")
+
+grViz("
+  digraph Narrative {
+    'input$text_input' -> 'reactive_analysis';
+    'input$settings' -> 'reactive_analysis';
+    'reactive_analysis' -> 'output$narrative_text';
+  }
+")
+```
+
+2.
+Flipping the order of fct_infreq() and fct_lump() will only change the factor levels order. In particular, the function fct_infreq() orders the factor levels by frequency, and the function fct_lump() also orders the factor levels by frequency but it will only keep the top n factors and label the rest as Other.
+
+3.
+```{r}
+library(shiny)
+library(forcats)
+library(dplyr)
+library(ggplot2)
+
+dir.create("neiss")
+#> Warning in dir.create("neiss"): 'neiss' already exists
+download <- function(name) {
+  url <- "https://raw.github.com/hadley/mastering-shiny/main/neiss/"
+  download.file(paste0(url, name), paste0("neiss/", name), quiet = TRUE)
+}
+download("injuries.tsv.gz")
+download("population.tsv")
+download("products.tsv")
+products <- vroom::vroom("neiss/products.tsv")
+injuries <- vroom::vroom("neiss/injuries.tsv.gz")
+population <- vroom::vroom("neiss/population.tsv")
+
+count_top <- function(df, var, n = 5) {
+  df %>%
+    mutate({{ var }} := fct_lump(fct_infreq({{ var }}), n = n)) %>%
+    group_by({{ var }}) %>%
+    summarise(n = as.integer(sum(weight)))
+}
+
+ui <- fluidPage(
+  fluidRow(
+    column(8, selectInput("code", "Product",
+                          choices = setNames(products$prod_code, products$title),
+                          width = "100%")
+    ),
+    column(2, numericInput("rows", "Number of Rows",
+                           min = 1, max = 10, value = 5)),
+    column(2, selectInput("y", "Y Axis", c("rate", "count")))
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  ),
+  fluidRow(
+    column(2, actionButton("story", "Tell me a story")),
+    column(10, textOutput("narrative"))
+  )
+)
+
+server <- function(input, output, session) {
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  
+  # Find the maximum possible of rows.
+  max_no_rows <- reactive(
+    max(length(unique(selected()$diag)),
+        length(unique(selected()$body_part)),
+        length(unique(selected()$location)))
+  )
+  
+  # Update the maximum value for the numericInput based on max_no_rows().
+  observeEvent(input$code, {
+    updateNumericInput(session, "rows", max = max_no_rows())
+  })
+  
+  table_rows <- reactive(input$rows - 1)
+  
+  output$diag <- renderTable(
+    count_top(selected(), diag, n = table_rows()), width = "100%")
+  
+  output$body_part <- renderTable(
+    count_top(selected(), body_part, n = table_rows()), width = "100%")
+  
+  output$location <- renderTable(
+    count_top(selected(), location, n = table_rows()), width = "100%")
+  
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+  
+  output$age_sex <- renderPlot({
+    if (input$y == "count") {
+      summary() %>%
+        ggplot(aes(age, n, colour = sex)) +
+        geom_line() +
+        labs(y = "Estimated number of injuries") +
+        theme_grey(15)
+    } else {
+      summary() %>%
+        ggplot(aes(age, rate, colour = sex)) +
+        geom_line(na.rm = TRUE) +
+        labs(y = "Injuries per 10,000 people") +
+        theme_grey(15)
+    }
+  })
+  
+  output$narrative <- renderText({
+    input$story
+    selected() %>% pull(narrative) %>% sample(1)
+  })
+}
+
+shinyApp(ui, server)
+```
+
+4.
+```{r}
+count_top <- function(df, var, n = 5) {
+  df %>%
+    mutate({{ var }} := fct_lump(fct_infreq({{ var }}), n = n)) %>%
+    group_by({{ var }}) %>%
+    summarise(n = as.integer(sum(weight)))
+}
+
+ui <- fluidPage(
+  fluidRow(
+    column(8, selectInput("code", "Product",
+                          choices = setNames(products$prod_code, products$title),
+                          width = "100%")
+    ),
+    column(2, numericInput("rows", "Number of Rows",
+                           min = 1, max = 10, value = 5)),
+    column(2, selectInput("y", "Y Axis", c("rate", "count")))
+  ),
+  fluidRow(
+    column(4, tableOutput("diag")),
+    column(4, tableOutput("body_part")),
+    column(4, tableOutput("location"))
+  ),
+  fluidRow(
+    column(12, plotOutput("age_sex"))
+  ),
+  fluidRow(
+    column(2, actionButton("prev_story", "Previous story")),
+    column(2, actionButton("next_story", "Next story")),
+    column(8, textOutput("narrative"))
+  )
+)
+
+server <- function(input, output, session) {
+  selected <- reactive(injuries %>% filter(prod_code == input$code))
+  
+  # Find the maximum possible of rows.
+  max_no_rows <- reactive(
+    max(length(unique(selected()$diag)),
+        length(unique(selected()$body_part)),
+        length(unique(selected()$location)))
+  )
+  
+  # Update the maximum value for the numericInput based on max_no_rows().
+  observeEvent(input$code, {
+    updateNumericInput(session, "rows", max = max_no_rows())
+  })
+  
+  table_rows <- reactive(input$rows - 1)
+  
+  output$diag <- renderTable(
+    count_top(selected(), diag, n = table_rows()), width = "100%")
+  
+  output$body_part <- renderTable(
+    count_top(selected(), body_part, n = table_rows()), width = "100%")
+  
+  output$location <- renderTable(
+    count_top(selected(), location, n = table_rows()), width = "100%")
+  
+  summary <- reactive({
+    selected() %>%
+      count(age, sex, wt = weight) %>%
+      left_join(population, by = c("age", "sex")) %>%
+      mutate(rate = n / population * 1e4)
+  })
+  
+  output$age_sex <- renderPlot({
+    if (input$y == "count") {
+      summary() %>%
+        ggplot(aes(age, n, colour = sex)) +
+        geom_line() +
+        labs(y = "Estimated number of injuries") +
+        theme_grey(15)
+    } else {
+      summary() %>%
+        ggplot(aes(age, rate, colour = sex)) +
+        geom_line(na.rm = TRUE) +
+        labs(y = "Injuries per 10,000 people") +
+        theme_grey(15)
+    }
+  })
+  
+  # Store the maximum posible number of stories.
+  max_no_stories <- reactive(length(selected()$narrative))
+  
+  # Reactive used to save the current position in the narrative list.
+  story <- reactiveVal(1)
+  
+  # Reset the story counter if the user changes the product code. 
+  observeEvent(input$code, {
+    story(1)
+  })
+  
+  # When the user clicks "Next story", increase the current position in the
+  # narrative but never go beyond the interval [1, length of the narrative].
+  # Note that the mod function (%%) is keeping `current`` within this interval.
+  observeEvent(input$next_story, {
+    story((story() %% max_no_stories()) + 1)
+  })
+  
+  # When the user clicks "Previous story" decrease the current position in the
+  # narrative. Note that we also take advantage of the mod function.
+  observeEvent(input$prev_story, {
+    story(((story() - 2) %% max_no_stories()) + 1)
+  })
+  
+  output$narrative <- renderText({
+    selected()$narrative[story()]
+  })
+}
+
+shinyApp(ui, server)
+```
+
