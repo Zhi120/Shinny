@@ -1,6 +1,6 @@
 ---
 title: "Shiny"
-output: pdf_document
+output: html_document
 date: "2024-11-15"
 ---
 
